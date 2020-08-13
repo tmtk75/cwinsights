@@ -1,18 +1,18 @@
-name: Release Go Project
+name: Release
 on:
   push:
     tags:
-      - v*
+      - v[0-9]*
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
     steps:
-    - name: Set up Go 1.13
+    - name: Set up Go 1.14
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.14
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v1
@@ -25,7 +25,7 @@ jobs:
 
   setup-release:
     name: Setup release
-    needs: test # This workflow is executed after completed 'test' job
+    needs: test
     runs-on: ubuntu-latest
     steps:
     - name: Create release
@@ -35,9 +35,9 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
+        release_name: ${{ github.ref }}
         draft: false
-        prerelease: false
+        prerelease: true
 
     - name: Get url to upload to release from output
       env:
@@ -51,57 +51,26 @@ jobs:
         name: artifact
         path: artifact/url.txt
 
-  release-code:
-    name: Release Source Code
-    needs: setup-release
-    runs-on: ubuntu-latest
-    steps:
-    - name: Download artifact to get url to upload to release
-      uses: actions/download-artifact@v1
-      with:
-        name: artifact
-
-    - name: Get url to upload to release from artifact
-      id: get_url
-      run: |
-        url=$(cat artifact/url.txt)
-        echo "##[set-output name=upload_url;]$url"
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v1
-
-    - name: Pack source code in zip file
-      run: |
-        mkdir dist
-        ls -la
-        cp *.go dist/
-        zip -j -r release dist
-    - name: Upload release asset
-      uses: actions/upload-release-asset@v1.0.1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.get_url.outputs.upload_url }}
-        asset_path: release.zip
-        asset_name: source.zip
-        asset_content_type: application/zip
-
   release-pkg:
     name: Release package
     needs: setup-release
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [mac64, lin64, win64]
+        os:
+          - linux
+          - darwin
+          - windows
         include:
-        - os: mac64
-          goos: darwin
-          arch: amd64
-        - os: lin64
+        - os: linux
           goos: linux
           arch: amd64
-        - os: win64
-          goos: windows
+        - os: darwin
+          goos: darwin
           arch: amd64
+        #- os: windows
+        #  goos: windows
+        #  arch: amd64
 
     steps:
     - name: Set up Go 1.13
@@ -120,10 +89,10 @@ jobs:
         goos: ${{ matrix.goos }}
         goarch: ${{ matrix.arch }}
       run: |
-        mkdir dist
-        cp test.txt dist/
-        GOOS=$goos GOARCH=$goarch go build -v -o dist/app .
-        zip -j -r release dist
+        GOOS=$goos GOARCH=$goarch go build -v -o cwinsight .
+        chmod +x ./cwinsight
+        zip -j -r release cwinsight
+
     - name: Download artifact to get url to upload to release
       uses: actions/download-artifact@v1
       with:
@@ -134,6 +103,7 @@ jobs:
       run: |
         url=$(cat artifact/url.txt)
         echo "##[set-output name=upload_url;]$url"
+
     - name: Upload release asset
       uses: actions/upload-release-asset@v1.0.1
       env:
@@ -141,5 +111,5 @@ jobs:
       with:
         upload_url: ${{ steps.get_url.outputs.upload_url }}
         asset_path: release.zip
-        asset_name: release-${{ matrix.os }}.zip
+        asset_name: cwinsight-${{ matrix.os }}.zip
         asset_content_type: application/zip

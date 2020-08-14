@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/external"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	"github.com/ktr0731/go-fuzzyfinder"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -128,18 +129,54 @@ wait:
 }
 
 func List() {
-	svc := cloudwatchlogs.New(cfg)
-	res, err := svc.DescribeLogGroupsRequest(&cloudwatchlogs.DescribeLogGroupsInput{}).Send(context.Background())
+	gs, err := listLogGroups()
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
 
 	if viper.GetBool(keyFull) {
-		fmt.Printf("%v\n", res)
+		fmt.Printf("%v\n", gs)
 		return
 	}
 
-	for _, e := range res.LogGroups {
+	for _, e := range gs {
 		fmt.Printf("%v\n", *e.LogGroupName)
 	}
+
+	idx, err := fuzzyfinder.Find(
+		gs,
+		func(i int) string {
+			return *gs[i].LogGroupName
+		},
+		fuzzyfinder.WithPreviewWindow(func(i, w, h int) string {
+			if i == -1 {
+				return ""
+			}
+			retention := int64(0)
+			if gs[i].RetentionInDays != nil {
+				retention = *gs[i].RetentionInDays
+			}
+			var (
+				name  = *gs[i].LogGroupName
+				ctime = time.Unix(*gs[i].CreationTime/1000, 0)
+				size  = *gs[i].StoredBytes
+			)
+			return fmt.Sprintf(`log-group        : %s
+creation-time    : %v
+stored-bytes     : %d
+retention-in-days: %d days`, name, ctime, size, retention)
+		}))
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("%v\n", gs[idx])
+}
+
+func listLogGroups() ([]cloudwatchlogs.LogGroup, error) {
+	svc := cloudwatchlogs.New(cfg)
+	res, err := svc.DescribeLogGroupsRequest(&cloudwatchlogs.DescribeLogGroupsInput{}).Send(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return res.LogGroups, nil
 }

@@ -20,6 +20,7 @@ const (
 	keyLogGroup    = "log-group"
 	keyBefore      = "before"
 	keyFull        = "full"
+	keyFzf         = "fzf"
 )
 
 func init() {
@@ -61,6 +62,7 @@ func init() {
 		{optname: "query-string", key: keyQueryString, defval: "", envname: "QUERY_STRING", desc: "query string"},
 		{optname: "log-group", key: keyLogGroup, defval: "", envname: "LOG_GROUP", desc: "log group"},
 		{optname: "before", key: keyBefore, defval: time.Duration(0), envname: "BEFORE", desc: "before"},
+		{optname: "fzf", key: keyFzf, defval: false, envname: "", desc: "fzf"},
 	})
 	config(ListCmd.Flags(), []opt{
 		{optname: "full", key: keyFull, defval: false, envname: "", desc: "full"},
@@ -74,7 +76,16 @@ var RootCmd = cobra.Command{
 var QueryCmd = cobra.Command{
 	Use: "query",
 	Run: func(c *cobra.Command, args []string) {
-		Query(viper.GetString(keyQueryString), viper.GetString(keyLogGroup))
+		gn := viper.GetString(keyLogGroup)
+		if viper.GetBool(keyFzf) {
+			gs, err := listLogGroups()
+			if err != nil {
+				log.Fatal(err)
+			}
+			lg, err := fzf(gs)
+			gn = *lg.LogGroupName
+		}
+		Query(viper.GetString(keyQueryString), gn)
 	},
 }
 
@@ -110,7 +121,7 @@ func Query(qs, group string) {
 		log.Fatalf("%v", err)
 	}
 
-	fmt.Printf("%v\n", res)
+	//fmt.Printf("%v\n", res)
 
 wait:
 	r, err := svc.GetQueryResultsRequest(&cloudwatchlogs.GetQueryResultsInput{
@@ -120,12 +131,15 @@ wait:
 		log.Fatalf("%v", err)
 	}
 	if r.Status != "Complete" {
-		fmt.Printf("%v\n", r)
+		//fmt.Printf("%v\n", r)
 		time.Sleep(time.Second * 1)
 		goto wait
 	}
 
-	fmt.Printf("%v\n", r)
+	//fmt.Printf("%v\n", r)
+	for _, e := range r.Results {
+		fmt.Printf("%v", *e[0].Value)
+	}
 }
 
 func List() {
@@ -142,7 +156,9 @@ func List() {
 	for _, e := range gs {
 		fmt.Printf("%v\n", *e.LogGroupName)
 	}
+}
 
+func fzf(gs []cloudwatchlogs.LogGroup) (*cloudwatchlogs.LogGroup, error) {
 	idx, err := fuzzyfinder.Find(
 		gs,
 		func(i int) string {
@@ -167,9 +183,9 @@ stored-bytes     : %d
 retention-in-days: %d days`, name, ctime, size, retention)
 		}))
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	fmt.Printf("%v\n", gs[idx])
+	return &gs[idx], nil
 }
 
 func listLogGroups() ([]cloudwatchlogs.LogGroup, error) {

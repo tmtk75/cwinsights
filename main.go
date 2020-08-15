@@ -2,14 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"log"
 	"os"
-	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh/terminal"
@@ -19,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/ktr0731/go-fuzzyfinder"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -42,31 +36,6 @@ func init() {
 
 	RootCmd.AddCommand(&QueryCmd, &ListCmd, &BulkCmd)
 
-	type opt struct {
-		optname string
-		key     string
-		defval  interface{}
-		envname string
-		desc    string
-	}
-
-	config := func(fs *pflag.FlagSet, opts []opt) {
-		for _, e := range opts {
-			switch t := e.defval.(type) {
-			case string:
-				fs.String(e.optname, t, e.desc)
-			case bool:
-				fs.Bool(e.optname, t, e.desc)
-			case time.Duration:
-				fs.Duration(e.optname, t, e.desc)
-			default:
-				log.Fatalf(`unsupported type. "%v" %v`, e.optname, e.defval)
-			}
-			viper.BindPFlag(e.key, fs.Lookup(e.optname))
-			viper.BindEnv(e.key, e.envname)
-		}
-	}
-
 	config(RootCmd.PersistentFlags(), []opt{
 		{optname: "query-string", key: keyQueryString, defval: "", envname: "QUERY_STRING", desc: "query string"},
 		{optname: "before", key: keyBefore, defval: time.Duration(0), envname: "BEFORE", desc: "before"},
@@ -85,46 +54,6 @@ var RootCmd = cobra.Command{
 	Use: "cwinsight",
 }
 
-var QueryCmd = cobra.Command{
-	Use: "query",
-	Run: func(c *cobra.Command, args []string) {
-		gn := viper.GetString(keyLogGroup)
-		if viper.GetBool(keyFzf) {
-			gs, err := listLogGroups()
-			if err != nil {
-				log.Fatal(err)
-			}
-			lg, err := fzf(gs)
-			gn = *lg.LogGroupName
-		}
-
-		start, end := startEndTime()
-		r := Query(viper.GetString(keyQueryString), gn, start, end)
-		fmt.Printf("%v", r)
-	},
-}
-
-var BulkCmd = cobra.Command{
-	Use:  "bulk [file]",
-	Args: cobra.ExactArgs(1),
-	Run: func(c *cobra.Command, args []string) {
-		f, err := os.Open(args[0])
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer f.Close()
-		r := either(f)(os.Stdin)
-		Bulk(viper.GetString(keyQueryString), r)
-	},
-}
-
-var ListCmd = cobra.Command{
-	Use: "list",
-	Run: func(c *cobra.Command, args []string) {
-		List()
-	},
-}
-
 var cfg aws.Config
 
 func main() {
@@ -134,105 +63,6 @@ func main() {
 	}
 	cfg = c
 	RootCmd.Execute()
-}
-
-func Bulk(qs string, r io.Reader) {
-	b, err := ioutil.ReadAll(r)
-	if err != nil {
-		log.Fatal(err)
-	}
-	l := strings.Split(strings.Trim(string(b), " \t\n"), "\n")
-	s, e := startEndTime()
-	d := e.Sub(s)
-	log.Printf("d: %v", d)
-	if d*time.Duration(len(l)) > viper.GetDuration(keyDurationQuota) {
-		log.Fatalf("exceeded 24h, %v", d)
-	}
-
-	type Result struct {
-		Response  *cloudwatchlogs.GetQueryResultsResponse
-		GroupName string
-	}
-	res := make(chan *Result)
-	var wg sync.WaitGroup
-	f := func(lg string) {
-		res <- &Result{Response: Query(qs, lg, s, e), GroupName: lg}
-		wg.Done()
-	}
-
-	for _, e := range l {
-		wg.Add(1)
-		go f(e)
-	}
-
-	a := make([]*Result, 0)
-	go func() {
-		for e := range res {
-			//fmt.Printf("%v\n", e)
-			a = append(a, e)
-		}
-	}()
-	wg.Wait()
-	close(res)
-
-	type Output struct {
-		StartTime time.Time
-		EndTime   time.Time
-		Results   []*Result
-	}
-	bb, err := json.Marshal(Output{Results: a, StartTime: s, EndTime: e})
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("%v", string(bb))
-}
-
-func Query(qs, group string, start, end time.Time) *cloudwatchlogs.GetQueryResultsResponse {
-	//log.Printf("qs: %v, group: %v, start: %v, end: %v", qs, group, start, end)
-	svc := cloudwatchlogs.New(cfg)
-	res, err := svc.StartQueryRequest(&cloudwatchlogs.StartQueryInput{
-		LogGroupName: aws.String(group),
-		QueryString:  aws.String(qs),
-		StartTime:    aws.Int64(start.Unix()),
-		EndTime:      aws.Int64(end.Unix()),
-	}).Send(context.Background())
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-
-	//fmt.Printf("%v\n", res)
-
-wait:
-	r, err := svc.GetQueryResultsRequest(&cloudwatchlogs.GetQueryResultsInput{
-		QueryId: res.QueryId,
-	}).Send(context.Background())
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-	if r.Status != "Complete" {
-		//fmt.Printf("%v\n", r)
-		time.Sleep(time.Second * 1)
-		goto wait
-	}
-
-	return r
-}
-
-func List() {
-	gs, err := listLogGroups()
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-
-	if viper.GetBool(keyFull) {
-		b, _ := json.Marshal(gs)
-		fmt.Printf("%v", string(b))
-		return
-	}
-
-	for _, e := range gs {
-		fmt.Printf("%v\n", *e.LogGroupName)
-	}
 }
 
 func fzf(gs []cloudwatchlogs.LogGroup) (*cloudwatchlogs.LogGroup, error) {

@@ -29,7 +29,7 @@ func init() {
 
 	RootCmd.AddCommand(&QueryCmd, &ListCmd, &BulkCmd)
 
-	config(RootCmd.PersistentFlags(), []opt{
+	composeopt(RootCmd.PersistentFlags(), []opt{
 		{optname: "query-string", key: keyQueryString, defval: "", envname: "QUERY_STRING", desc: "query string"},
 		{optname: "before", key: keyBefore, defval: time.Duration(0), envname: "BEFORE", desc: "before"},
 		{optname: "duration-quota", key: keyDurationQuota, defval: time.Hour * 24 * 3, envname: "", desc: "duration-quota"},

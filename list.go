@@ -16,7 +16,7 @@ var (
 )
 
 func init() {
-	config(ListCmd.Flags(), []opt{
+	composeopt(ListCmd.Flags(), []opt{
 		{optname: "full", key: keyFull, defval: false, envname: "", desc: "full"},
 	})
 }

@@ -16,7 +16,7 @@ type opt struct {
 	desc    string
 }
 
-func config(fs *pflag.FlagSet, opts []opt) {
+func composeopt(fs *pflag.FlagSet, opts []opt) {
 	for _, e := range opts {
 		switch t := e.defval.(type) {
 		case string:

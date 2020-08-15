@@ -19,7 +19,7 @@ var (
 )
 
 func init() {
-	config(QueryCmd.Flags(), []opt{
+	composeopt(QueryCmd.Flags(), []opt{
 		{optname: "log-group", key: keyLogGroup, defval: "", envname: "LOG_GROUP", desc: "log group"},
 		{optname: "fzf", key: keyFzf, defval: false, envname: "", desc: "fzf"},
 	})

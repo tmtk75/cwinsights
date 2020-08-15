@@ -46,8 +46,8 @@ var QueryCmd = cobra.Command{
 }
 
 func Query(qs, group string, start, end time.Time) *cloudwatchlogs.GetQueryResultsResponse {
-	logger.Printf("query-string: %v", qs)
 	logger.Printf("group-name: %v", group)
+	logger.Printf("query-string: %v", qs)
 	logger.Printf("start: %v", iso8601(start))
 	logger.Printf("end: %v", iso8601(end))
 	logger.Printf("duration: %v", end.Sub(start))

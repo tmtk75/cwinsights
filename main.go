@@ -22,19 +22,23 @@ const (
 )
 
 func init() {
-	cobra.OnInitialize(func() {
-		viper.SetConfigName(".cwinsights")
-		viper.AddConfigPath(".")
-		viper.AutomaticEnv()
-		viper.ReadInConfig()
-	})
-
 	RootCmd.AddCommand(&QueryCmd, &ListCmd, &BulkCmd)
 
 	composeopt(RootCmd.PersistentFlags(), []opt{
 		{optname: "query-string", key: keyQueryString, defval: "", envname: "QUERY_STRING", desc: "query string"},
 		{optname: "before", key: keyBefore, defval: time.Duration(0), envname: "BEFORE", desc: "before"},
 		{optname: "duration-quota", key: keyDurationQuota, defval: time.Hour * 24 * 1, envname: "", desc: "duration-quota"},
+		{optname: "verbose", key: keyVerbose, defval: false, envname: "VERBOSE", desc: "verbosely"},
+	})
+
+	cobra.OnInitialize(func() {
+		viper.SetConfigName(".cwinsights")
+		viper.AddConfigPath(".")
+		viper.AutomaticEnv()
+		viper.ReadInConfig()
+		if viper.GetBool(keyVerbose) {
+			logger.Printf = log.Printf
+		}
 	})
 }
 
@@ -50,10 +54,6 @@ func main() {
 		panic("unable to load SDK config, " + err.Error())
 	}
 	cfg = c
-
-	if viper.GetBool(keyVerbose) {
-		logger.Printf = log.Printf
-	}
 
 	RootCmd.Execute()
 }
@@ -83,9 +83,13 @@ func iso8601(t time.Time) string {
 }
 
 func checkDurationQuota(d time.Duration) {
+	if d <= 0 {
+		log.Fatalf("the given duration is zero or negative. %v", d)
+	}
+
 	q := viper.GetDuration(keyDurationQuota)
 	if d > q {
-		log.Fatalf("exceeded. %v > %v", d, q)
+		log.Fatalf("the given duration exceeds the quota. %v > %v", d, q)
 	}
 
 }

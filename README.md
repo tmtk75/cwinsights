@@ -5,7 +5,7 @@
 ## Motivation
 AWS Step Functions consists of several Lambda, ECS Task, etc.
 Their logs are basically stored into CloudWatch Logs and some log groups are created.
-Sometimes I want to query a pattern in all such log groups.
+Sometimes I want to query a pattern in all such log groups in one-shot.
 This command supports it.
 
 

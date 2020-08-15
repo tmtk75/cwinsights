@@ -57,11 +57,18 @@ func Bulk(qs string, r io.Reader) {
 		go f(e)
 	}
 
-	a := make([]*Result, 0)
+	type RT struct {
+		GroupName string
+		Response  interface{}
+	}
+	a := make([]*RT, 0)
 	go func() {
 		for e := range res {
 			//fmt.Printf("%v\n", e)
-			a = append(a, e)
+			a = append(a, &RT{
+				GroupName: e.GroupName,
+				Response:  format(e.Response),
+			})
 		}
 	}()
 	wg.Wait()
@@ -70,9 +77,9 @@ func Bulk(qs string, r io.Reader) {
 	type Output struct {
 		StartTime time.Time
 		EndTime   time.Time
-		Results   []*Result
+		ResultSet []*RT
 	}
-	bb, err := json.Marshal(Output{Results: a, StartTime: start, EndTime: end})
+	bb, err := json.Marshal(Output{ResultSet: a, StartTime: start, EndTime: end})
 	if err != nil {
 		log.Fatal(err)
 	}

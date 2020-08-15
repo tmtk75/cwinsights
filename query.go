@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -16,18 +17,20 @@ import (
 var (
 	keyGroupName = "group-name"
 	keyFzf       = "fzf"
+	keyRaw       = "raw"
 )
 
 func init() {
 	composeopt(QueryCmd.Flags(), []opt{
 		{optname: "group-name", key: keyGroupName, defval: "", envname: "GROUP_NAME", desc: "group name"},
 		{optname: "fzf", key: keyFzf, defval: false, envname: "", desc: "fuzzyfinder"},
+		{optname: "raw", key: keyRaw, defval: false, envname: "", desc: "print in raw format of AWS SDK"},
 	})
 }
 
 var QueryCmd = cobra.Command{
 	Use:   "query",
-	Short: "execute insight",
+	Short: "execute query",
 	Run: func(c *cobra.Command, args []string) {
 		gn := viper.GetString(keyGroupName)
 		if viper.GetBool(keyFzf) {
@@ -41,7 +44,12 @@ var QueryCmd = cobra.Command{
 
 		start, end := startEndTime()
 		r := Query(viper.GetString(keyQueryString), gn, start, end)
-		fmt.Printf("%v", r)
+		f := format(r)
+		b, err := json.Marshal(f)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("%v\n", string(b))
 	},
 }
 
@@ -108,4 +116,27 @@ retention-in-days: %d days`, name, ctime, size, retention)
 		return nil, err
 	}
 	return &gs[idx], nil
+}
+
+func format(r *cloudwatchlogs.GetQueryResultsResponse) interface{} {
+	if viper.GetBool(keyRaw) {
+		return r
+
+	}
+
+	a := make([]map[string]interface{}, 0)
+	for _, e := range r.Results {
+		m := make(map[string]interface{})
+		for _, v := range e {
+			m[*v.Field] = *v.Value
+		}
+		a = append(a, m)
+	}
+	return struct {
+		Results    []map[string]interface{}
+		Statistics interface{}
+	}{
+		Results:    a,
+		Statistics: r.Statistics,
+	}
 }

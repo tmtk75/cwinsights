@@ -68,9 +68,9 @@ jobs:
         - os: darwin
           goos: darwin
           arch: amd64
-        #- os: windows
-        #  goos: windows
-        #  arch: amd64
+        - os: windows
+          goos: windows
+          arch: amd64
 
     steps:
     - name: Set up Go 1.13

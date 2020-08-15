@@ -18,7 +18,7 @@ $ cat > groups
 /aws/lambda/foo3
 
 $ cwinsights bulk groups \
-    --before 1h \
+    --since 1h \
     --query-string 'fields @message | filter @message =~ /INFO/'
 ...
 ```
@@ -27,8 +27,18 @@ Simply `query` is supported. `--group-name` gives log group name.
 It's also convenient synchronously to print results.
 ```
 $ cwinsights query \
-    --before 1h \
+    --since 1h \
     --query-string "INFO" \
     --group-name /aws/lambda/foo1
 ...
+```
+
+`--end` and `--start` are supported.
+```
+
+$ cwinsights query \
+    --end "2020-08-15T10:00:00Z" \
+    --start "2020-08-15T09:00:00Z" \
+    --query-string INFO \
+    --group-name /aws/lambda/foo1
 ```

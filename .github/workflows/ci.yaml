@@ -84,6 +84,9 @@ jobs:
     - name: Get dependencies
       run: go get -v -t -d ./...
 
+    - name: Fetch tags
+      run: git fetch --tags
+
     - name: Build
       env:
         goos: ${{ matrix.goos }}

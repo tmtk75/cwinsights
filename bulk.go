@@ -17,7 +17,8 @@ import (
 )
 
 var BulkCmd = cobra.Command{
-	Use:  "bulk [file]",
+	Use: "bulk [file]",
+	//Short: "file contains group names separated with LF.",
 	Args: cobra.ExactArgs(1),
 	Run: func(c *cobra.Command, args []string) {
 		f, err := os.Open(args[0])
@@ -25,9 +26,13 @@ var BulkCmd = cobra.Command{
 			log.Fatal(err)
 		}
 		defer f.Close()
-		r := either(f)(os.Stdin)
-		Bulk(viper.GetString(keyQueryString), r)
+		Bulk(viper.GetString(keyQueryString), either(f)(os.Stdin))
 	},
+}
+
+type Result struct {
+	Response  *cloudwatchlogs.GetQueryResultsResponse
+	GroupName string
 }
 
 func Bulk(qs string, r io.Reader) {
@@ -36,21 +41,19 @@ func Bulk(qs string, r io.Reader) {
 		log.Fatal(err)
 	}
 	l := strings.Split(strings.Trim(string(b), " \t\n"), "\n")
-	s, e := startEndTime()
-	d := e.Sub(s)
-	log.Printf("d: %v", d)
-	if d*time.Duration(len(l)) > viper.GetDuration(keyDurationQuota) {
-		log.Fatalf("exceeded 24h, %v", d)
+	start, end := startEndTime()
+
+	// Check quota.
+	d := end.Sub(start) * time.Duration(len(l))
+	q := viper.GetDuration(keyDurationQuota)
+	if d >= q {
+		log.Fatalf("exceeded. %v > %v", d, q)
 	}
 
-	type Result struct {
-		Response  *cloudwatchlogs.GetQueryResultsResponse
-		GroupName string
-	}
 	res := make(chan *Result)
 	var wg sync.WaitGroup
 	f := func(lg string) {
-		res <- &Result{Response: Query(qs, lg, s, e), GroupName: lg}
+		res <- &Result{Response: Query(qs, lg, start, end), GroupName: lg}
 		wg.Done()
 	}
 
@@ -74,7 +77,7 @@ func Bulk(qs string, r io.Reader) {
 		EndTime   time.Time
 		Results   []*Result
 	}
-	bb, err := json.Marshal(Output{Results: a, StartTime: s, EndTime: e})
+	bb, err := json.Marshal(Output{Results: a, StartTime: start, EndTime: end})
 	if err != nil {
 		log.Fatal(err)
 	}

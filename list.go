@@ -22,7 +22,9 @@ func init() {
 }
 
 var ListCmd = cobra.Command{
-	Use: "list",
+	Use:     "list",
+	Aliases: []string{"ls"},
+	Short:   "list log groups",
 	Run: func(c *cobra.Command, args []string) {
 		List()
 	},

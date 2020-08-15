@@ -18,6 +18,13 @@ type opt struct {
 
 func composeopt(fs *pflag.FlagSet, opts []opt) {
 	for _, e := range opts {
+		if e.key == "" {
+			log.Fatalf(`empty key. %v`, e)
+		}
+		if e.optname == "" {
+			log.Fatalf(`empty optname. %v`, e)
+		}
+
 		switch t := e.defval.(type) {
 		case string:
 			fs.String(e.optname, t, e.desc)
@@ -29,6 +36,8 @@ func composeopt(fs *pflag.FlagSet, opts []opt) {
 			log.Fatalf(`unsupported type. "%v" %v`, e.optname, e.defval)
 		}
 		viper.BindPFlag(e.key, fs.Lookup(e.optname))
-		viper.BindEnv(e.key, e.envname)
+		if e.envname != "" {
+			viper.BindEnv(e.key, e.envname)
+		}
 	}
 }

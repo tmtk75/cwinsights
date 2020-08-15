@@ -14,21 +14,22 @@ import (
 )
 
 var (
-	keyLogGroup = "log-group"
-	keyFzf      = "fzf"
+	keyGroupName = "group-name"
+	keyFzf       = "fzf"
 )
 
 func init() {
 	composeopt(QueryCmd.Flags(), []opt{
-		{optname: "log-group", key: keyLogGroup, defval: "", envname: "LOG_GROUP", desc: "log group"},
-		{optname: "fzf", key: keyFzf, defval: false, envname: "", desc: "fzf"},
+		{optname: "group-name", key: keyGroupName, defval: "", envname: "GROUP_NAME", desc: "group name"},
+		{optname: "fzf", key: keyFzf, defval: false, envname: "", desc: "fuzzyfinder"},
 	})
 }
 
 var QueryCmd = cobra.Command{
-	Use: "query",
+	Use:   "query",
+	Short: "execute insight",
 	Run: func(c *cobra.Command, args []string) {
-		gn := viper.GetString(keyLogGroup)
+		gn := viper.GetString(keyGroupName)
 		if viper.GetBool(keyFzf) {
 			gs, err := listLogGroups()
 			if err != nil {
@@ -45,7 +46,19 @@ var QueryCmd = cobra.Command{
 }
 
 func Query(qs, group string, start, end time.Time) *cloudwatchlogs.GetQueryResultsResponse {
-	//log.Printf("qs: %v, group: %v, start: %v, end: %v", qs, group, start, end)
+	logger.Printf("query-string: %v", qs)
+	logger.Printf("group-name: %v", group)
+	logger.Printf("start: %v", iso8601(start))
+	logger.Printf("end: %v", iso8601(end))
+	logger.Printf("duration: %v", end.Sub(start))
+
+	// Check quota.
+	d := end.Sub(start)
+	q := viper.GetDuration(keyDurationQuota)
+	if d >= q {
+		log.Fatalf("exceeded. %v > %v", d, q)
+	}
+
 	svc := cloudwatchlogs.New(cfg)
 	res, err := svc.StartQueryRequest(&cloudwatchlogs.StartQueryInput{
 		LogGroupName: aws.String(group),
@@ -57,8 +70,6 @@ func Query(qs, group string, start, end time.Time) *cloudwatchlogs.GetQueryResul
 		log.Fatalf("%v", err)
 	}
 
-	//fmt.Printf("%v\n", res)
-
 wait:
 	r, err := svc.GetQueryResultsRequest(&cloudwatchlogs.GetQueryResultsInput{
 		QueryId: res.QueryId,
@@ -67,7 +78,6 @@ wait:
 		log.Fatalf("%v", err)
 	}
 	if r.Status != "Complete" {
-		//fmt.Printf("%v\n", r)
 		time.Sleep(time.Second * 1)
 		goto wait
 	}

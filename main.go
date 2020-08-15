@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"log"
 	"os"
 	"time"
 
@@ -17,6 +18,7 @@ const (
 	keyQueryString   = "query-string"
 	keyBefore        = "before"
 	keyDurationQuota = "duration-quota"
+	keyVerbose       = "verbose"
 )
 
 func init() {
@@ -32,7 +34,7 @@ func init() {
 	composeopt(RootCmd.PersistentFlags(), []opt{
 		{optname: "query-string", key: keyQueryString, defval: "", envname: "QUERY_STRING", desc: "query string"},
 		{optname: "before", key: keyBefore, defval: time.Duration(0), envname: "BEFORE", desc: "before"},
-		{optname: "duration-quota", key: keyDurationQuota, defval: time.Hour * 24 * 3, envname: "", desc: "duration-quota"},
+		{optname: "duration-quota", key: keyDurationQuota, defval: time.Hour * 24 * 1, envname: "", desc: "duration-quota"},
 	})
 }
 
@@ -48,6 +50,11 @@ func main() {
 		panic("unable to load SDK config, " + err.Error())
 	}
 	cfg = c
+
+	if viper.GetBool(keyVerbose) {
+		logger.Printf = log.Printf
+	}
+
 	RootCmd.Execute()
 }
 
@@ -65,8 +72,12 @@ func startEndTime() (start, end time.Time) {
 		now    = time.Now()
 		before = viper.GetDuration(keyBefore)
 	)
-	//log.Printf("%v %v", before, now.Add(-before))
 	start = now.Add(-before)
 	end = now
 	return
+}
+
+func iso8601(t time.Time) string {
+	return t.UTC().Format("2006-01-02T15:04:05Z")
+
 }

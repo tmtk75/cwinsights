@@ -24,7 +24,7 @@ const (
 )
 
 func init() {
-	RootCmd.AddCommand(&QueryCmd, &ListCmd, &BulkCmd)
+	RootCmd.AddCommand(&QueryCmd, &ListCmd, &BulkCmd, &VersionCmd)
 
 	var (
 		now   = time.Now()

@@ -17,9 +17,9 @@ import (
 )
 
 var BulkCmd = cobra.Command{
-	Use: "bulk [file]",
-	//Short: "file contains group names separated with LF.",
-	Args: cobra.ExactArgs(1),
+	Use:   "bulk [file]",
+	Short: "bulky query",
+	Args:  cobra.ExactArgs(1),
 	Run: func(c *cobra.Command, args []string) {
 		f, err := os.Open(args[0])
 		if err != nil {

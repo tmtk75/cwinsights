@@ -16,7 +16,9 @@ import (
 
 const (
 	keyQueryString   = "query-string"
-	keyBefore        = "before"
+	keySince         = "since"
+	keyStart         = "start"
+	keyEnd           = "end"
 	keyDurationQuota = "duration-quota"
 	keyVerbose       = "verbose"
 )
@@ -24,9 +26,15 @@ const (
 func init() {
 	RootCmd.AddCommand(&QueryCmd, &ListCmd, &BulkCmd)
 
+	var (
+		now   = time.Now()
+		since = time.Minute * 5
+	)
 	composeopt(RootCmd.PersistentFlags(), []opt{
 		{optname: "query-string", key: keyQueryString, defval: "", envname: "QUERY_STRING", desc: "query string"},
-		{optname: "before", key: keyBefore, defval: time.Duration(0), envname: "BEFORE", desc: "before"},
+		{optname: "end", key: keyEnd, defval: iso8601utc(now), envname: "", desc: "end time"},
+		{optname: "since", key: keySince, defval: since, envname: "", desc: "since"},
+		{optname: "start", key: keyStart, defval: "", envname: "", desc: "start time"},
 		{optname: "duration-quota", key: keyDurationQuota, defval: time.Hour * 24 * 1, envname: "", desc: "duration-quota"},
 		{optname: "verbose", key: keyVerbose, defval: false, envname: "VERBOSE", desc: "verbosely"},
 	})
@@ -67,19 +75,31 @@ func either(file *os.File) func(r io.Reader) io.Reader {
 	}
 }
 
+const layoututciso8160 = "2006-01-02T15:04:05Z"
+
 func startEndTime() (start, end time.Time) {
 	var (
-		now    = time.Now()
-		before = viper.GetDuration(keyBefore)
+		since = viper.GetDuration(keySince)
+		s     = viper.GetString(keyStart)
+		e     = viper.GetString(keyEnd)
 	)
-	start = now.Add(-before)
-	end = now
+	end, err := time.Parse(layoututciso8160, e)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if s == "" {
+		start = end.Add(-since)
+	} else {
+		start, err = time.Parse(layoututciso8160, s)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 	return
 }
 
-func iso8601(t time.Time) string {
-	return t.UTC().Format("2006-01-02T15:04:05Z")
-
+func iso8601utc(t time.Time) string {
+	return t.UTC().Format(layoututciso8160)
 }
 
 func checkDurationQuota(d time.Duration) {

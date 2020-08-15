@@ -1,12 +1,15 @@
 # README
 `cwinsights` is a utility command for CloudWatch Logs Insights for the purpose of bulky query.
 
+
 ## Motivation
 AWS Step Functions consists of several Lambda, ECS Task, etc.
 Their logs are basically stored into CloudWatch Logs and some log groups are created.
 Sometimes I want to query a pattern in all such log groups.
 This command supports it.
 
+
+## Getting Started
 `bulk` is to use the purpose. It ends synchronously.
 ```
 $ cat > groups

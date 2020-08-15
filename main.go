@@ -23,7 +23,7 @@ const (
 
 func init() {
 	cobra.OnInitialize(func() {
-		viper.SetConfigName(".cwinsight")
+		viper.SetConfigName(".cwinsights")
 		viper.AddConfigPath(".")
 		viper.AutomaticEnv()
 		viper.ReadInConfig()
@@ -39,7 +39,7 @@ func init() {
 }
 
 var RootCmd = cobra.Command{
-	Use: "cwinsight",
+	Use: "cwinsights",
 }
 
 var cfg aws.Config

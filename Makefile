@@ -6,11 +6,11 @@ VAR_COMMIT:= main.Commit
 LDFLAGS := -ldflags "-X $(VAR_VERSION)=$(VERSION) \
 	-X $(VAR_COMMIT)=$(COMMIT)"
 
-cwinsight: *.go
-	go build $(LDFLAGS) -o cwinsight .
+cwinsights: *.go
+	go build $(LDFLAGS) -o cwinsights .
 
 install:
 	go install
 
 clean:
-	rm -rf cwinsight
+	rm -rf cwinsights

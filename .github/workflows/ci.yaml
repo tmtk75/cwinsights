@@ -89,9 +89,9 @@ jobs:
         goos: ${{ matrix.goos }}
         goarch: ${{ matrix.arch }}
       run: |
-        GOOS=$goos GOARCH=$goarch go build -v -o cwinsight .
-        chmod +x ./cwinsight
-        zip -j -r release cwinsight
+        GOOS=$goos GOARCH=$goarch go build -v -o cwinsights .
+        chmod +x ./cwinsights
+        zip -j -r release cwinsights
 
     - name: Download artifact to get url to upload to release
       uses: actions/download-artifact@v1
@@ -111,5 +111,5 @@ jobs:
       with:
         upload_url: ${{ steps.get_url.outputs.upload_url }}
         asset_path: release.zip
-        asset_name: cwinsight-${{ matrix.os }}.zip
+        asset_name: cwinsights-${{ matrix.os }}.zip
         asset_content_type: application/zip

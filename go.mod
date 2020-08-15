@@ -1,4 +1,4 @@
-module github.com/tmtk75/cwinsight
+module github.com/tmtk75/cwinsights
 
 go 1.14
 

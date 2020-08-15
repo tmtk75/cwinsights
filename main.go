@@ -2,9 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
+	"os"
+	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/external"
@@ -16,11 +24,12 @@ import (
 )
 
 const (
-	keyQueryString = "query-string"
-	keyLogGroup    = "log-group"
-	keyBefore      = "before"
-	keyFull        = "full"
-	keyFzf         = "fzf"
+	keyQueryString   = "query-string"
+	keyLogGroup      = "log-group"
+	keyBefore        = "before"
+	keyFull          = "full"
+	keyFzf           = "fzf"
+	keyDurationQuota = "duration-quota"
 )
 
 func init() {
@@ -31,7 +40,7 @@ func init() {
 		viper.ReadInConfig()
 	})
 
-	RootCmd.AddCommand(&QueryCmd, &ListCmd)
+	RootCmd.AddCommand(&QueryCmd, &ListCmd, &BulkCmd)
 
 	type opt struct {
 		optname string
@@ -58,10 +67,13 @@ func init() {
 		}
 	}
 
-	config(QueryCmd.Flags(), []opt{
+	config(RootCmd.PersistentFlags(), []opt{
 		{optname: "query-string", key: keyQueryString, defval: "", envname: "QUERY_STRING", desc: "query string"},
-		{optname: "log-group", key: keyLogGroup, defval: "", envname: "LOG_GROUP", desc: "log group"},
 		{optname: "before", key: keyBefore, defval: time.Duration(0), envname: "BEFORE", desc: "before"},
+		{optname: "duration-quota", key: keyDurationQuota, defval: time.Hour * 24 * 3, envname: "", desc: "duration-quota"},
+	})
+	config(QueryCmd.Flags(), []opt{
+		{optname: "log-group", key: keyLogGroup, defval: "", envname: "LOG_GROUP", desc: "log group"},
 		{optname: "fzf", key: keyFzf, defval: false, envname: "", desc: "fzf"},
 	})
 	config(ListCmd.Flags(), []opt{
@@ -85,7 +97,24 @@ var QueryCmd = cobra.Command{
 			lg, err := fzf(gs)
 			gn = *lg.LogGroupName
 		}
-		Query(viper.GetString(keyQueryString), gn)
+
+		start, end := startEndTime()
+		r := Query(viper.GetString(keyQueryString), gn, start, end)
+		fmt.Printf("%v", r)
+	},
+}
+
+var BulkCmd = cobra.Command{
+	Use:  "bulk [file]",
+	Args: cobra.ExactArgs(1),
+	Run: func(c *cobra.Command, args []string) {
+		f, err := os.Open(args[0])
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer f.Close()
+		r := either(f)(os.Stdin)
+		Bulk(viper.GetString(keyQueryString), r)
 	},
 }
 
@@ -107,15 +136,65 @@ func main() {
 	RootCmd.Execute()
 }
 
-func Query(qs, group string) {
+func Bulk(qs string, r io.Reader) {
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		log.Fatal(err)
+	}
+	l := strings.Split(strings.Trim(string(b), " \t\n"), "\n")
+	s, e := startEndTime()
+	d := e.Sub(s)
+	log.Printf("d: %v", d)
+	if d*time.Duration(len(l)) > viper.GetDuration(keyDurationQuota) {
+		log.Fatalf("exceeded 24h, %v", d)
+	}
+
+	type Result struct {
+		Response  *cloudwatchlogs.GetQueryResultsResponse
+		GroupName string
+	}
+	res := make(chan *Result)
+	var wg sync.WaitGroup
+	f := func(lg string) {
+		res <- &Result{Response: Query(qs, lg, s, e), GroupName: lg}
+		wg.Done()
+	}
+
+	for _, e := range l {
+		wg.Add(1)
+		go f(e)
+	}
+
+	a := make([]*Result, 0)
+	go func() {
+		for e := range res {
+			//fmt.Printf("%v\n", e)
+			a = append(a, e)
+		}
+	}()
+	wg.Wait()
+	close(res)
+
+	type Output struct {
+		StartTime time.Time
+		EndTime   time.Time
+		Results   []*Result
+	}
+	bb, err := json.Marshal(Output{Results: a, StartTime: s, EndTime: e})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("%v", string(bb))
+}
+
+func Query(qs, group string, start, end time.Time) *cloudwatchlogs.GetQueryResultsResponse {
+	//log.Printf("qs: %v, group: %v, start: %v, end: %v", qs, group, start, end)
 	svc := cloudwatchlogs.New(cfg)
-	now := time.Now()
-	before := viper.GetDuration(keyBefore)
 	res, err := svc.StartQueryRequest(&cloudwatchlogs.StartQueryInput{
 		LogGroupName: aws.String(group),
 		QueryString:  aws.String(qs),
-		StartTime:    aws.Int64(now.Truncate(before).Unix()),
-		EndTime:      aws.Int64(now.Unix()),
+		StartTime:    aws.Int64(start.Unix()),
+		EndTime:      aws.Int64(end.Unix()),
 	}).Send(context.Background())
 	if err != nil {
 		log.Fatalf("%v", err)
@@ -136,10 +215,7 @@ wait:
 		goto wait
 	}
 
-	//fmt.Printf("%v\n", r)
-	for _, e := range r.Results {
-		fmt.Printf("%v", *e[0].Value)
-	}
+	return r
 }
 
 func List() {
@@ -149,7 +225,8 @@ func List() {
 	}
 
 	if viper.GetBool(keyFull) {
-		fmt.Printf("%v\n", gs)
+		b, _ := json.Marshal(gs)
+		fmt.Printf("%v", string(b))
 		return
 	}
 
@@ -195,4 +272,24 @@ func listLogGroups() ([]cloudwatchlogs.LogGroup, error) {
 		return nil, err
 	}
 	return res.LogGroups, nil
+}
+
+func either(file *os.File) func(r io.Reader) io.Reader {
+	return func(r io.Reader) io.Reader {
+		if terminal.IsTerminal(int(file.Fd())) {
+			return r
+		}
+		return file
+	}
+}
+
+func startEndTime() (start, end time.Time) {
+	var (
+		now    = time.Now()
+		before = viper.GetDuration(keyBefore)
+	)
+	//log.Printf("%v %v", before, now.Add(-before))
+	start = now.Add(-before)
+	end = now
+	return
 }

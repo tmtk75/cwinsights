@@ -52,12 +52,7 @@ func Query(qs, group string, start, end time.Time) *cloudwatchlogs.GetQueryResul
 	logger.Printf("end: %v", iso8601(end))
 	logger.Printf("duration: %v", end.Sub(start))
 
-	// Check quota.
-	d := end.Sub(start)
-	q := viper.GetDuration(keyDurationQuota)
-	if d >= q {
-		log.Fatalf("exceeded. %v > %v", d, q)
-	}
+	checkDurationQuota(end.Sub(start))
 
 	svc := cloudwatchlogs.New(cfg)
 	res, err := svc.StartQueryRequest(&cloudwatchlogs.StartQueryInput{

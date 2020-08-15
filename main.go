@@ -81,3 +81,11 @@ func iso8601(t time.Time) string {
 	return t.UTC().Format("2006-01-02T15:04:05Z")
 
 }
+
+func checkDurationQuota(d time.Duration) {
+	q := viper.GetDuration(keyDurationQuota)
+	if d > q {
+		log.Fatalf("exceeded. %v > %v", d, q)
+	}
+
+}

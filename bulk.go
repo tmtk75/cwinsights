@@ -43,12 +43,7 @@ func Bulk(qs string, r io.Reader) {
 	l := strings.Split(strings.Trim(string(b), " \t\n"), "\n")
 	start, end := startEndTime()
 
-	// Check quota.
-	d := end.Sub(start) * time.Duration(len(l))
-	q := viper.GetDuration(keyDurationQuota)
-	if d >= q {
-		log.Fatalf("exceeded. %v > %v", d, q)
-	}
+	checkDurationQuota(end.Sub(start) * time.Duration(len(l)))
 
 	res := make(chan *Result)
 	var wg sync.WaitGroup

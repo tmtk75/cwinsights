@@ -10,7 +10,7 @@ cwinsights: *.go
 	go build $(LDFLAGS) -o cwinsights .
 
 install:
-	go install
+	go install $(LDFLAGS)
 
 clean:
 	rm -rf cwinsights

@@ -8,9 +8,22 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	"github.com/ktr0731/go-fuzzyfinder"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+var (
+	keyLogGroup = "log-group"
+	keyFzf      = "fzf"
+)
+
+func init() {
+	config(QueryCmd.Flags(), []opt{
+		{optname: "log-group", key: keyLogGroup, defval: "", envname: "LOG_GROUP", desc: "log group"},
+		{optname: "fzf", key: keyFzf, defval: false, envname: "", desc: "fzf"},
+	})
+}
 
 var QueryCmd = cobra.Command{
 	Use: "query",
@@ -60,4 +73,34 @@ wait:
 	}
 
 	return r
+}
+
+func fzf(gs []cloudwatchlogs.LogGroup) (*cloudwatchlogs.LogGroup, error) {
+	idx, err := fuzzyfinder.Find(
+		gs,
+		func(i int) string {
+			return *gs[i].LogGroupName
+		},
+		fuzzyfinder.WithPreviewWindow(func(i, w, h int) string {
+			if i == -1 {
+				return ""
+			}
+			retention := int64(0)
+			if gs[i].RetentionInDays != nil {
+				retention = *gs[i].RetentionInDays
+			}
+			var (
+				name  = *gs[i].LogGroupName
+				ctime = time.Unix(*gs[i].CreationTime/1000, 0)
+				size  = *gs[i].StoredBytes
+			)
+			return fmt.Sprintf(`log-group        : %s
+creation-time    : %v
+stored-bytes     : %d
+retention-in-days: %d days`, name, ctime, size, retention)
+		}))
+	if err != nil {
+		return nil, err
+	}
+	return &gs[idx], nil
 }

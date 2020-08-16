@@ -53,7 +53,12 @@ var QueryCmd = cobra.Command{
 	},
 }
 
-func Query(qs, group string, start, end time.Time) *cloudwatchlogs.GetQueryResultsResponse {
+type QueryResult struct {
+	*cloudwatchlogs.GetQueryResultsResponse
+	QueryId string
+}
+
+func Query(qs, group string, start, end time.Time) *QueryResult {
 	logger.Printf("group-name: %v", group)
 	logger.Printf("query-string: %v", qs)
 	logger.Printf("start: %v", iso8601utc(start))
@@ -85,7 +90,10 @@ wait:
 		goto wait
 	}
 
-	return r
+	return &QueryResult{
+		GetQueryResultsResponse: r,
+		QueryId:                 *res.QueryId,
+	}
 }
 
 func fzf(gs []cloudwatchlogs.LogGroup) (*cloudwatchlogs.LogGroup, error) {
@@ -118,25 +126,27 @@ retention-in-days: %d days`, name, ctime, size, retention)
 	return &gs[idx], nil
 }
 
-func format(r *cloudwatchlogs.GetQueryResultsResponse) interface{} {
+func format(r *QueryResult) interface{} {
 	if viper.GetBool(keyRaw) {
 		return r
 
 	}
 
-	a := make([]map[string]interface{}, 0)
+	a := make([]map[string]string, 0)
 	for _, e := range r.Results {
-		m := make(map[string]interface{})
+		m := make(map[string]string)
 		for _, v := range e {
 			m[*v.Field] = *v.Value
 		}
 		a = append(a, m)
 	}
 	return struct {
-		Results    []map[string]interface{}
+		Results    []map[string]string
 		Statistics interface{}
+		QueryId    string
 	}{
 		Results:    a,
 		Statistics: r.Statistics,
+		QueryId:    r.QueryId,
 	}
 }

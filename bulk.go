@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -31,8 +30,8 @@ var BulkCmd = cobra.Command{
 }
 
 type Result struct {
-	Response  *cloudwatchlogs.GetQueryResultsResponse
-	GroupName string
+	QueryResult *QueryResult
+	GroupName   string
 }
 
 func Bulk(qs string, r io.Reader) {
@@ -48,7 +47,7 @@ func Bulk(qs string, r io.Reader) {
 	res := make(chan *Result)
 	var wg sync.WaitGroup
 	f := func(lg string) {
-		res <- &Result{Response: Query(qs, lg, start, end), GroupName: lg}
+		res <- &Result{QueryResult: Query(qs, lg, start, end), GroupName: lg}
 		wg.Done()
 	}
 
@@ -58,8 +57,8 @@ func Bulk(qs string, r io.Reader) {
 	}
 
 	type RT struct {
-		GroupName string
 		Response  interface{}
+		GroupName string
 	}
 	a := make([]*RT, 0)
 	go func() {
@@ -67,7 +66,7 @@ func Bulk(qs string, r io.Reader) {
 			//fmt.Printf("%v\n", e)
 			a = append(a, &RT{
 				GroupName: e.GroupName,
-				Response:  format(e.Response),
+				Response:  format(e.QueryResult),
 			})
 		}
 	}()
@@ -75,11 +74,12 @@ func Bulk(qs string, r io.Reader) {
 	close(res)
 
 	type Output struct {
-		StartTime time.Time
-		EndTime   time.Time
-		ResultSet []*RT
+		QueryString string
+		StartTime   time.Time
+		EndTime     time.Time
+		ResultSet   []*RT
 	}
-	bb, err := json.Marshal(Output{ResultSet: a, StartTime: start, EndTime: end})
+	bb, err := json.Marshal(Output{ResultSet: a, StartTime: start, EndTime: end, QueryString: qs})
 	if err != nil {
 		log.Fatal(err)
 	}

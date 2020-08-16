@@ -39,6 +39,9 @@ var QueryCmd = cobra.Command{
 				log.Fatal(err)
 			}
 			lg, err := fzf(gs)
+			if err != nil {
+				log.Fatal(err)
+			}
 			gn = *lg.LogGroupName
 		}
 

@@ -75,7 +75,24 @@ func either(file *os.File) func(r io.Reader) io.Reader {
 	}
 }
 
-const layoututciso8160 = "2006-01-02T15:04:05Z"
+func parseTime(s string) time.Time {
+	layouts := []string{
+		"2006-01-02T15:04:05Z",
+		"2006-01-02",
+		"2006-01-02-07:00",
+		"2006-01-02T00:00:00-07:00",
+		"20060102",
+		"20060102-07:00",
+	}
+	for _, e := range layouts {
+		t, err := time.Parse(e, s)
+		if err == nil {
+			return t
+		}
+	}
+	log.Fatalf("cannot parse '%v'", s)
+	return time.Time{}
+}
 
 func startEndTime() (start, end time.Time) {
 	var (
@@ -83,23 +100,17 @@ func startEndTime() (start, end time.Time) {
 		s     = viper.GetString(keyStart)
 		e     = viper.GetString(keyEnd)
 	)
-	end, err := time.Parse(layoututciso8160, e)
-	if err != nil {
-		log.Fatal(err)
-	}
+	end = parseTime(e)
 	if s == "" {
 		start = end.Add(-since)
 	} else {
-		start, err = time.Parse(layoututciso8160, s)
-		if err != nil {
-			log.Fatal(err)
-		}
+		start = parseTime(s)
 	}
 	return
 }
 
 func iso8601utc(t time.Time) string {
-	return t.UTC().Format(layoututciso8160)
+	return t.UTC().Format("2006-01-02T15:04:05Z")
 }
 
 func checkDurationQuota(d time.Duration) {

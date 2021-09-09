@@ -32,6 +32,8 @@ func composeopt(fs *pflag.FlagSet, opts []opt) {
 			fs.Bool(e.optname, t, e.desc)
 		case time.Duration:
 			fs.Duration(e.optname, t, e.desc)
+		case int64:
+			fs.Int64(e.optname, t, e.desc)
 		default:
 			log.Fatalf(`unsupported type. "%v" %v`, e.optname, e.defval)
 		}

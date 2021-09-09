@@ -18,6 +18,7 @@ var (
 	keyGroupName = "group-name"
 	keyFzf       = "fzf"
 	keyRaw       = "raw"
+	keyLimit     = "limit"
 )
 
 func init() {
@@ -25,6 +26,7 @@ func init() {
 		{optname: "group-name", key: keyGroupName, defval: "", envname: "GROUP_NAME", desc: "group name"},
 		{optname: "fzf", key: keyFzf, defval: false, envname: "", desc: "fuzzyfinder"},
 		{optname: "raw", key: keyRaw, defval: false, envname: "", desc: "print in raw format of AWS SDK"},
+		{optname: "limit", key: keyLimit, defval: int64(1000), envname: "", desc: "the maximum number of log events to return in the query."},
 	})
 }
 
@@ -76,6 +78,7 @@ func Query(qs, group string, start, end time.Time) *QueryResult {
 		QueryString:  aws.String(qs),
 		StartTime:    aws.Int64(start.Unix()),
 		EndTime:      aws.Int64(end.Unix()),
+		Limit:        aws.Int64(viper.GetInt64(keyLimit)),
 	}).Send(context.Background())
 	if err != nil {
 		log.Fatalf("%v", err)
